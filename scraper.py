@@ -144,6 +144,5 @@ class Scraper:
         print('\t'*indent+"}")
 
 
-
 if __name__ == '__main__':
     sc=Scraper.init()
