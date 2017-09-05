@@ -16,13 +16,14 @@ from timeit import default_timer as timer
 import re
 from threading import Thread
 from queue import Queue
+from pymongo.errors import DuplicateKeyError
 
 class PageScraper(Thread):    
     def __init__(self, queue, master):
         Thread.__init__(self)
         self.BASE_LINK='http://search.library.duke.edu/search?Nao=START&Nty=1&Nr=OR%28210969%2cOR%28206474%29%29&Ne=2+200043+206474+210899+210956&N=206437'
         self.queue=queue
-        db=MongoClient('localhost:27017').lib
+        db=MongoClient('localhost:27017').sample
         self.ebookcoll=db.ebooks
         self.bookcoll=db.bookids
         self.pagecoll=db.pages
@@ -85,19 +86,22 @@ class PageScraper(Thread):
             file.close()
             self.writeToMongoDB(self.pagecoll, {'pagenum': pagenum})
             end=timer()
-            #tstring = str(timedelta(seconds=(end - start)))
-            #print("time elapsed: {}".format(tstring))
+            tstring = str(timedelta(seconds=(end - start)))
+            print("time elapsed: {}".format(tstring))
             
-            wait=6-(end-start)
-            if wait>0:
-                time.sleep(wait)
+            #wait=6-(end-start)
+            #if wait>0:
+            #    time.sleep(wait)
             self.master.updateProgress()
 
     #helper methods
     #write a document to the given mongo database
     def writeToMongoDB(self, coll, doc):
         #self.printDoc(doc)
-        coll.insert_one(doc)
+        try:
+            coll.insert_one(doc)
+        except DuplicateKeyError:
+            print("dup key error")
         
     #print a doc in a nice format
     def printDoc(self, doc, indent=0):
@@ -128,7 +132,7 @@ class PageScraper(Thread):
         print(str(soup.prettify()).translate(non_bmp_map))
 
 class Master:
-    NWorkers = 6
+    NWorkers = 40
 
     def __init__(self):
         self.scrapers=[]
@@ -142,7 +146,7 @@ class Master:
         file.close()
 
         queue=Queue()
-        for i in range(start,start+915208):
+        for i in range(start,start+10000):
             queue.put(i)
 
         self.pbar = tqdm(total=4915208, position=0,ncols=80, mininterval=1.0)
