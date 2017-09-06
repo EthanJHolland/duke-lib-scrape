@@ -3,20 +3,79 @@ import traceback
 from time import sleep
 import math
 import time
-from shortid import ShortId
-from urllib.request import ProxyHandler
 from urllib.request import urlopen
+from urllib.request import Request
 import urllib.request
 from bs4 import BeautifulSoup
 from urllib.error import HTTPError
+from datetime import timedelta
+from pymongo import MongoClient
+from timeit import default_timer as timer
 
-class Scraper:    
-   def __init__(self):
-        start=time.clock()
+class Scraper:
+    def __init__(self):
+        self.BASE_LINK='http://search.library.duke.edu/search?id=DUKEID'
+        db=MongoClient('localhost:27017').sample
+        self.ebookcoll=db.ebooks
+        self.bookcoll=db.books
+        self.samplebookcoll=db.sbooks
+        self.sampleebookcoll=db.sebooks
+        self.pagecoll=db.pages
 
-        end=time.clock()
-        elapsed=end-start
-        print("total time: "+str(math.floor(elapsed/60))+" min "+str(math.floor(10*(elapsed%60))/10)+ " sec")
+    def start(self):
+        start=timer()
+        link = 'http://firstsearch.oclc.org.proxy.lib.duke.edu/WebZ/FSFETCH?fetchtype=fullrecord:next=html/record.html:bad=error/badfetch.html:resultset=12:format=FI:recno=1:numrecs=2:entitylibrarycount=6383:sessionid=fsapp5-60190-j79fxg6w-21anzc:entitypagenum=63:3:sessionid=fsapp5-60190-j79fxg6w-21anzc:entitypagenum=63:3'
+        request = Request(link, method='GET', headers={'Cookie':'ezproxy=MM3huP6lGJWChkj'})
+        data = urlopen(request).read()
+        soup = BeautifulSoup(data, 'html.parser')
+        print(soup.prettify(), file=open("out.txt", "w"))
+
+        end=timer()
+        tstring = str(timedelta(seconds=(end - start)))            
+        print("\ntime elapsed: {}".format(tstring))
+
+
+        # go=True
+        # while go:
+        #     go=False
+        #     start=timer()
+
+            
+        #     bookid='DUKE003139904'
+        #     print("getting book "+str(bookid))
+            
+
+        #     try:
+        #         data = urlopen(self.BASE_LINK.replace('DUKEID', bookid)).read()
+        #         soup = BeautifulSoup(data, 'html.parser')
+        #     except:
+        #         print(traceback.format_exc())
+        #         print("trying again")
+        #         time.sleep(10)
+        #         data = urlopen(self.BASE_LINK.replace('DUKEID', bookid)).read()
+        #         soup = BeautifulSoup(data, 'html.parser')
+
+        #     # # href=re.compile("^\?id=DUKE")
+        #     # print(soup.prettify(), file=open("out.txt", "w"))
+
+            # end=timer()
+            # tstring = str(timedelta(seconds=(end - start)))            
+            # # print("\ntime elapsed: {}".format(tstring))
+        
+        # aa=['Description: xii, 285 pages : illustrations, map ; 23 cm',
+        # 'Description: xv, 180 p. : ill. ; 24 cm.',
+        # 'Description: 301 p. ; 21 cm.',
+        # 'Description: 301 p. 19 cm.',
+        # 'Description: 277 pages ; 21 cm',
+        # 'Description: viii, 336 p. ; 21 cm.',
+        # 'Description: xv, 275 p. : ill. ; 24 cm.',
+        # 'Description: x, 283 p. : ill., maps ; 24 cm.',
+        # 'Description: 3 v. : ill. ; 29 cm.',
+        # 'Description: xx, 380 p. ; 24 cm.']
+
+        # for a in aa:
+        #     ill, length, pages = self.extractDescription(a)
+        #     print(str(ill)+"\t"+str(length)+"\t"+str(pages))
 
     #given a description, return a tuple with whether or not the book has illustrations, the length in cm, and the number of pages
     def extractDescription(self, desc):
@@ -50,15 +109,17 @@ class Scraper:
         #get number of pages
         if 'description' in desc:
             desc=desc[desc.index('description')+len('description')+1:].lstrip()
+
         if desc[0] in 'lvxi':
             #roman numeral
             start=-1*self.interperetRomanNumerals(self.fw(desc).replace(',',''))
-            desc=desc[s.index(' '):].lstrip()
+            desc=desc[desc.index(' '):].lstrip()
 
             try:
                 end=int(self.fw(desc))
             except:
                 #write err
+                end=0
                 pass
 
             pages=end-start
@@ -77,25 +138,24 @@ class Scraper:
 
     #get the last word of a string
     def lw(self, s):
-        return s[s.rindex(' '):]
+        return s[s.rindex(' ')+1:]
 
     #convert a roman numeral lowercase string to an integer
     #checks for invalid characters but assumes the roman numeral is valid (ex iviviv will return 12)
     def interperetRomanNumerals(self, rn):
-        rnToInt = ['l': 50, 'x': 10, 'v': 5, 'i': 1]
-        sum=0
+        rnToInt = {'l': 50, 'x': 10, 'v': 5, 'i': 1}
+        sum = 0
 
         for c in rn:
             if c not in 'lxvi':
                 #not a valid rn string
-                #TODO: write error
                 return False
 
         for i in range(len(rn)):
             c=rn[i]
             val=rnToInt[c]
             #check next char
-            if i<len(input)-1 && val<rnToInt[rn[i+1]]:
+            if i < len(rn)-1 and val < rnToInt[rn[i+1]]:
                 #next char is greater so subtract this one
                 sum-=val
             else:
@@ -103,12 +163,11 @@ class Scraper:
 
         return sum
 
-
     #helper methods
     #write a document to the given mongo database
     def writeToMongoDB(self, db, doc):
-        print("writing")
-        #self.printDoc(doc)
+        #print("writing")
+        self.printDoc(doc)
         #db.insert_one(doc)
         
     def removeTags(self, s):
@@ -144,5 +203,17 @@ class Scraper:
         print('\t'*indent+"}")
 
 
+# headers = {
+#     'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+#     'Accept-Encoding':'gzip, deflate',
+#     'Accept-Language':'en-US,en;q=0.8',
+#     'Cache-Control':'max-age=0',
+#     'Connection':'keep-alive',
+#     'Cookie':'ezproxy=MM3huP6lGJWChkj',
+#     'Host':'firstsearch.oclc.org.proxy.lib.duke.edu',
+#     'Upgrade-Insecure-Requests':1,
+#     'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'
+# }
 if __name__ == '__main__':
-    sc=Scraper.init()
+    sc=Scraper()
+    sc.start()
