@@ -139,7 +139,7 @@ class PageScraper(Thread):
         print(str(soup.prettify()).translate(non_bmp_map))
 
 class Master:
-    NWorkers = 3
+    NWorkers = 10
     NumBooks = 4928093
 
     def __init__(self):
